@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Продвинутый Bytebeat Player</title>
+    <style>
+        body { font-family: sans-serif; background-color: #121212; color: #eee; text-align: center; padding-top: 30px; }
+        h1 { color: #fff; }
+        p { color: #ccc; }
+        input[type="text"], input[type="number"], select {
+            padding: 8px;
+            font-size: 1em;
+            background-color: #333;
+            border: 1px solid #555;
+            color: #eee;
+            border-radius: 5px;
+            margin: 5px;
+        }
+        input[type="text"] { width: 400px; text-align: center; }
+        input[type="number"] { width: 80px; text-align: center; }
+        button {
+            font-size: 1rem;
+            padding: 8px 15px;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 8px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #0056b3; }
+        button#playButton { font-size: 1.5rem; padding: 10px 20px; background-color: #28a745; }
+        button#playButton:hover { background-color: #218838; }
+        button#showAdvanced { background-color: #6c757d; }
+        button#showAdvanced:hover { background-color: #5a6268; }
+        button.try-button { background-color: #17a2b8; font-size: 0.9em; padding: 5px 10px;}
+        button.try-button:hover { background-color: #138496; }
+        #controls, #presets, #advancedControls { margin-top: 20px; }
+        #error {
+            color: #ff4d4d;
+            margin-top: 15px;
+            min-height: 20px;
+            font-weight: bold;
+        }
+        .control-group {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            display: inline-block;
+        }
+        label {
+            display: inline-block;
+            width: 200px;
+            text-align: right;
+            padding-right: 10px;
+        }
+        #presets-container {
+            max-width: 800px;
+            margin: 20px auto;
+            text-align: left;
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        #presets-container h3 {
+            text-align: center;
+            margin-top: 0;
+            color: #fff;
+        }
+        .preset-category {
+            margin-bottom: 15px;
+        }
+        .preset-category h4 {
+            background-color: #333;
+            padding: 10px;
+            margin: 0;
+            cursor: pointer;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .preset-category h4:hover {
+            background-color: #444;
+        }
+        .preset-formulas {
+            padding-left: 20px;
+            display: none; /* Скрыто по умолчанию */
+        }
+        .formula-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 5px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .formula-item:last-child {
+            border-bottom: none;
+        }
+        .formula-code {
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #ccc;
+            word-break: break-all;
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Продвинутый Bytebeat Player</h1>
+
+    <div id="controls">
+        <input type="text" id="formulaInput" value="(t*(42 & t>>10)) >> (t>>8 & 3) ^ t>>4">
+        <br>
+        <button id="applyButton">Применить формулу</button>
+    </div>
+
+    <div id="error"></div>
+
+    <button id="playButton">▶ Play</button>
+    
+    <div id="presets-container">
+        <h3>Популярные пресеты на разные темы</h3>
+        <div id="presets-list"></div>
+    </div>
+
+    <br><br>
+    <button id="showAdvanced">Показать экспериментальные функции</button>
+    <p id="advancedWarning" style="color: #ff9800; display: none;">Не нажимайте, если не разбираетесь в этом.</p>
+
+    <div id="advancedControls" style="display: none;">
+        <div class="control-group">
+            <label for="beatType">Тип Бита:</label>
+            <select id="beatType">
+                <option value="bytebeat">ByteBeat (0-255)</option>
+                <option value="signed">Signed Bytebeat (-128-127)</option>
+                <option value="float">FloatBeat (-1.0 to 1.0)</option>
+                <option value="func">Funcbeat (Hz)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="sampleRate">Частота дискретизации:</label>
+            <input type="number" id="sampleRate" value="8000"> Гц
+        </div>
+        <div class="control-group">
+            <label for="startT">Начальное значение t:</label>
+            <input type="number" id="startT" value="1">
+        </div>
+        <div class="control-group">
+            <label for="speed">Скорость:</label>
+            <input type="number" id="speed" value="1" step="0.1">x
+        </div>
+    </div>
+
+    <script>
+        const playButton = document.getElementById('playButton');
+        const applyButton = document.getElementById('applyButton');
+        const formulaInput = document.getElementById('formulaInput');
+        const errorDiv = document.getElementById('error');
+        const showAdvancedButton = document.getElementById('showAdvanced');
+        const advancedControls = document.getElementById('advancedControls');
+        const advancedWarning = document.getElementById('advancedWarning');
+        const presetsListContainer = document.getElementById('presets-list');
+
+        // Элементы расширенных настроек
+        const beatTypeSelect = document.getElementById('beatType');
+        const sampleRateInput = document.getElementById('sampleRate');
+        const startTInput = document.getElementById('startT');
+        const speedInput = document.getElementById('speed');
+
+        let audioBuffer;
+        let sourceNode;
+        let t = 1;
+        let bytebeatFormula;
+
+        // База данных пресетов (полностью обновленная)
+        const presets = {
+            xorror: {
+                name: "Xorror",
+                settings: { beatType: "bytebeat", sampleRate: 8000, startT: 1, speed: 1 },
+                formulas: [
+                    "(t*(5&t>>10))*(8&t>>14)*(3&t>>8)",
+                    "(t>>7|t|t>>6)*10+4*(t>>15&t>>11)",
+                    "(t*(t>>13|t>>9))&(t>>6)",
+                    "(t*(t>>5|t>>8))>>(t>>16)",
+                    "(t>>6|t|t>>(t>>16))*10+((t>>11)&7)",
+                    "((t>>10)&(t>>4)-((t>>10)*(t>>4)&t>>6))",
+                    "(t*(t>>5|t>>8))>>(t>>16)",
+                    "(t>>7|t|t>>6)*10+4*(t>>15&t>>11)",
+                    "(t*(t>>13|t>>9))&(t>>6)",
+                    "(t>>6|t|t>>(t>>16))*10+((t>>11)&7)",
+                    "(t*5&t>>7)|(t*3&t>>10)",
+                    "((t*9&t>>4)|(t*5&t>>7)|(t*3&t>>10))",
+                    "(t*(42 & t>>10)) >> (t>>8 & 3) ^ t>>4",
+                    "(t*9&t>>4)|(t*5&t>>7)|(t*3&t>>10)",
+                    "(t*(t>>5|t>>8))>>(t>>16)",
+                    "(t>>7|t|t>>6)*10+4*(t>>15&t>>11)",
+                    "(t*(t>>13|t>>9))&(t>>6)",
+                    "(t>>6|t|t>>(t>>16))*10+((t>>11)&7)",
+                    "(t*5&t>>7)|(t*3&t>>10)",
+                    "((t*9&t>>4)|(t*5&t>>7)|(t*3&t>>10))"
+                ]
+            },
+            virus: {
+                name: "Virus",
+                settings: { beatType: "bytebeat", sampleRate: 8000, startT: 0, speed: 1 },
+                formulas: [
+                    "t*5&(t>>7)|t*3&(t*4>>10)",
+                    "((t>>9|t>>13)&25)*(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t*3&t>>8)+(t>>5)*(t>>3&t>>8)",
+                    "(t*2&t>>11)+(t>>4)*(t>>3&t>>7)",
+                    "(t>>8^t>>10|t>>14)*(t>>4|t>>12)",
+                    "(t>>7|t>>2)*(t>>5|t>>1)",
+                    "(t>>11&t>>1|t>>6&t>>2|t>>3&t>>4|t>>5&t>>6|t>>7&t>>8|t>>9&t>>10)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)"
+                ]
+            },
+            fight: {
+                name: "Fight",
+                settings: { beatType: "bytebeat", sampleRate: 8000, startT: 1, speed: 1.5 },
+                formulas: [
+                    "t*((t&4096?6:16)+(1&t>>14))>>(3&t>>8)|t>>(t&4096?3:4)",
+                    "((t*9&t>>4)|(t*5&t>>7)|(t*3&t>>10))",
+                    "(t>>5|t>>8)*(t>>4|t>>12)",
+                    "(t>>7|t>>2)*(t>>5|t>>1)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)"
+                ]
+            },
+            happy: {
+                name: "Happy",
+                settings: { beatType: "bytebeat", sampleRate: 8000, startT: 0, speed: 1 },
+                formulas: [
+                    "t*((t&4096?t%65536<59392?7:t>>6:16)+(1&t>>14))>>(3&-t>>(t&2048?2:10))|t>>(t&16384?t&4096?4:3:2)",
+                    "(t*5&t>>7)|(t*3&t>>10)",
+                    "(t*2&t>>13)+(t>>3)*(t>>5&t>>8)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)"
+                ]
+            },
+            funny: {
+                name: "Funny",
+                settings: { beatType: "bytebeat", sampleRate: 8000, startT: 1, speed: 0.8 },
+                formulas: [
+                    "t*(((t>>12)|(t>>8))&(63&(t>>4)))",
+                    "(t>>8&t>>4|t>>5)*(t>>4&t>>2|t>>3)",
+                    "(t>>7|t>>2)*(t>>5|t>>1)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)"
+                ]
+            },
+            sad: {
+                name: "Sad",
+                settings: { beatType: "bytebeat", sampleRate: 11025, startT: 0, speed: 0.5 },
+                formulas: [
+                    "(t>>6|t|t>>(t>>16))*10+((t>>11)&7)",
+                    "(t*9&t>>4)+(t>>5)*(t>>3&t>>8)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)",
+                    "(t>>8|t>>10)*(t>>4|t>>12)",
+                    "(t>>6&t>>8|t>>3&t>>5|t>>2&t>>4|t>>1&t>>2|t>>0)",
+                    "(t>>5)*(t>>2^t>>9)+(t>>4)*(t>>3^t>>10)"
+                ]
+            }
+        };
+
+        function compileFormula(formulaString) {
+            try {
+                bytebeatFormula = new Function("t", `return (${formulaString});`);
+                errorDiv.textContent = '';
+                return true;
+            } catch (e) {
+                errorDiv.textContent = `Ошибка в формуле: ${e.message}`;
+                bytebeatFormula = null;
+                return false;
+            }
+        }
+
+        function generateAudioData() {
+            const beatType = beatTypeSelect.value;
+            const sampleRate = parseInt(sampleRateInput.value);
+            const duration = 60;
+            const length = sampleRate * duration;
+            const speed = parseFloat(speedInput.value);
+
+            const audioData = new Float32Array(length);
+            t = parseInt(startTInput.value);
+
+            for (let i = 0; i < length; i++) {
+                let value = bytebeatFormula(t);
+                t += speed;
+
+                switch (beatType) {
+                    case 'bytebeat':
+                        audioData[i] = ((value | 0) & 0xFF) / 255.0 * 2.0 - 1.0;
+                        break;
+                    case 'signed':
+                        audioData[i] = ((value | 0) + 128) / 255.0 * 2.0 - 1.0;
+                        break;
+                    case 'float':
+                        audioData[i] = Math.max(-1.0, Math.min(1.0, parseFloat(value)));
+                        break;
+                    case 'func':
+                        const freq = parseFloat(value);
+                        audioData[i] = Math.sin(2 * Math.PI * freq * i / sampleRate);
+                        break;
+                }
+            }
+            return audioData;
+        }
+
+        function play() {
+            if (sourceNode) sourceNode.stop();
+            const audioContext = new (window.AudioContext || window.webkitAudioContext());
+            const sampleRate = parseInt(sampleRateInput.value);
+            audioBuffer = audioContext.createBuffer(1, sampleRate * 60, sampleRate);
+            const channelData = audioBuffer.getChannelData(0);
+            channelData.set(generateAudioData());
+            sourceNode = audioContext.createBufferSource();
+            sourceNode.buffer = audioBuffer;
+            sourceNode.loop = true;
+            sourceNode.connect(audioContext.destination);
+            sourceNode.start();
+            playButton.textContent = '⏸ Stop';
+        }
+
+        function stop() {
+            if (sourceNode) {
+                sourceNode.stop();
+                sourceNode = null;
+            }
+            playButton.textContent = '▶ Play';
+        }
+        
+        function applyPreset(categoryKey, formula) {
+            const preset = presets[categoryKey];
+            formulaInput.value = formula;
+            beatTypeSelect.value = preset.settings.beatType;
+            sampleRateInput.value = preset.settings.sampleRate;
+            startTInput.value = preset.settings.startT;
+            speedInput.value = preset.settings.speed;
+            
+            if (compileFormula(formula)) {
+                stop();
+                t = preset.settings.startT;
+                errorDiv.textContent = `Применен пресет из категории: ${preset.name}`;
+            }
+        }
+
+        // --- Обработчики событий ---
+
+        applyButton.addEventListener('click', () => {
+            if (compileFormula(formulaInput.value)) {
+                stop();
+                t = parseInt(startTInput.value);
+            }
+        });
+
+        playButton.addEventListener('click', () => {
+            if (!bytebeatFormula) {
+                errorDiv.textContent = "Сначала примените формулу!";
+                return;
+            }
+            if (sourceNode) stop();
+            else play();
+        });
+
+        showAdvancedButton.addEventListener('click', () => {
+            showAdvancedButton.style.display = 'none';
+            advancedWarning.style.display = 'none';
+            advancedControls.style.display = 'block';
+        });
+
+        // --- Генерация списка пресетов при загрузке ---
+        window.onload = () => {
+            compileFormula(formulaInput.value);
+            for (const key in presets) {
+                const category = presets[key];
+                
+                // Создаем контейнер для категории
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'preset-category';
+
+                // Создаем заголовок категории (кликабельный)
+                const header = document.createElement('h4');
+                header.innerHTML = `${category.name} <span>▼</span>`;
+                header.addEventListener('click', () => {
+                    const formulasDiv = categoryDiv.querySelector('.preset-formulas');
+                    const arrow = header.querySelector('span');
+                    if (formulasDiv.style.display === 'block') {
+                        formulasDiv.style.display = 'none';
+                        arrow.textContent = '▼';
+                    } else {
+                        formulasDiv.style.display = 'block';
+                        arrow.textContent = '▲';
+                    }
+                });
+
+                // Создаем контейнер для формул
+                const formulasDiv = document.createElement('div');
+                formulasDiv.className = 'preset-formulas';
+                
+                // Добавляем формулы
+                category.formulas.forEach(formula => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'formula-item';
+
+                    const codeSpan = document.createElement('span');
+                    codeSpan.className = 'formula-code';
+                    codeSpan.textContent = formula;
+
+                    const tryButton = document.createElement('button');
+                    tryButton.className = 'try-button';
+                    tryButton.textContent = 'Попробовать';
+                    tryButton.addEventListener('click', () => {
+                        applyPreset(key, formula);
+                    });
+
+                    itemDiv.appendChild(codeSpan);
+                    itemDiv.appendChild(tryButton);
+                    formulasDiv.appendChild(itemDiv);
+                });
+
+                categoryDiv.appendChild(header);
+                categoryDiv.appendChild(formulasDiv);
+                presetsListContainer.appendChild(categoryDiv);
+            }
+        };
+
+    </script>
+</body>
+</html>
