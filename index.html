@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>!Bytebeat Player!</title>
+    <title>Простой и продвинутый Bytebeat Player!</title>
     <style>
         body { font-family: sans-serif; background-color: #121212; color: #eee; text-align: center; padding-top: 30px; }
         h1 { color: #fff; }
@@ -30,8 +30,13 @@
             transition: background-color 0.2s;
         }
         button:hover { background-color: #0056b3; }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
         button#playButton { font-size: 1.5rem; padding: 10px 20px; background-color: #28a745; }
-        button#playButton:hover { background-color: #218838; }
+        button#playButton:hover:not(:disabled) { background-color: #218838; }
         button#showAdvanced { background-color: #6c757d; }
         button#showAdvanced:hover { background-color: #5a6268; }
         button.try-button { background-color: #17a2b8; font-size: 0.9em; padding: 5px 10px;}
@@ -122,7 +127,7 @@
     </style>
 </head>
 <body>
-    <h1>Bytebeat Player</h1>
+    <h1>Продвинутый Bytebeat Player</h1>
 
     <div id="controls">
         <input type="text" id="formulaInput" value="(t*(42 & t>>10)) >> (t>>8 & 3) ^ t>>4">
@@ -192,7 +197,15 @@
         let bytebeatFormula;
         let isDirectPlayMode = false;
 
-        // База данных пресетов (полностью обновленная)
+        // Карта для преобразования типа бита
+        const beatTypeMap = {
+            'bytebeat': 'ByteBeat',
+            'signed': 'Signed Bytebeat',
+            'float': 'FloatBeat',
+            'func': 'Funcbeat'
+        };
+
+        // База данных пресетов (ПОЛНОСТЬЮ ВОССТАНОВЛЕНА)
         const presets = {
             xorror: {
                 name: "Xorror",
@@ -352,6 +365,73 @@
             }
         };
 
+        // --- НОВЫЕ ФУНКЦИИ ДЛЯ URL ---
+
+        function parseURL() {
+            const hash = window.location.hash.substring(1);
+            const parts = hash.split('/#settings');
+            
+            let formula = '';
+            let settings = {};
+
+            if (parts[0]) {
+                try {
+                    formula = decodeURIComponent(parts[0]);
+                } catch (e) {
+                    console.error("Failed to decode formula from URL:", e);
+                    formula = '';
+                }
+            }
+
+            if (parts[1]) {
+                try {
+                    const settingsStr = parts[1].replace(/[{}]/g, '');
+                    const settingPairs = settingsStr.split(',');
+                    settingPairs.forEach(pair => {
+                        if (pair.includes('hz')) {
+                            settings.sampleRate = parseInt(pair.replace('hz', ''), 10);
+                        } else if (pair.includes('t=')) {
+                            settings.startT = parseInt(pair.replace('t=', ''), 10);
+                        } else if (pair.includes('x')) {
+                            settings.speed = parseFloat(pair.replace('x', ''));
+                        } else { // beat type
+                            const nameFromUrl = pair.replace(/\s+/g, '');
+                            for (const key in beatTypeMap) {
+                                if (beatTypeMap[key].replace(/\s+/g, '') === nameFromUrl) {
+                                    settings.beatType = key;
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Failed to parse settings from URL:", e);
+                }
+            }
+            return { formula, settings };
+        }
+
+        function buildURL(formula, settings) {
+            const encodedFormula = encodeURIComponent(formula);
+            const beatTypeName = beatTypeMap[settings.beatType].replace(/\s+/g, '');
+            const settingsStr = `settings{${beatTypeName},${settings.sampleRate}hz,t=${settings.startT},${settings.speed}x}`;
+            return `#${encodedFormula}/#${settingsStr}`;
+        }
+
+        function updateURL() {
+            const currentSettings = {
+                beatType: beatTypeSelect.value,
+                sampleRate: sampleRateInput.value,
+                startT: startTInput.value,
+                speed: speedInput.value
+            };
+            const newURL = buildURL(formulaInput.value, currentSettings);
+            // Используем history.replaceState чтобы не создавать лишнюю запись в истории
+            history.replaceState(null, null, newURL);
+        }
+
+        // --- СУЩЕСТВУЮЩИЕ ФУНКЦИИ ---
+
         function compileFormula(formulaString) {
             try {
                 bytebeatFormula = new Function("t", `return (${formulaString});`);
@@ -366,32 +446,21 @@
 
         function generateAudioData() {
             const beatType = beatTypeSelect.value;
-            const sampleRate = parseInt(sampleRateInput.value);
+            const sampleRate = parseInt(sampleRateInput.value, 10);
             const duration = 60;
             const length = sampleRate * duration;
             const speed = parseFloat(speedInput.value);
-
             const audioData = new Float32Array(length);
-            t = parseInt(startTInput.value);
+            t = parseInt(startTInput.value, 10);
 
             for (let i = 0; i < length; i++) {
                 let value = bytebeatFormula(t);
                 t += speed;
-
                 switch (beatType) {
-                    case 'bytebeat':
-                        audioData[i] = ((value | 0) & 0xFF) / 255.0 * 2.0 - 1.0;
-                        break;
-                    case 'signed':
-                        audioData[i] = ((value | 0) + 128) / 255.0 * 2.0 - 1.0;
-                        break;
-                    case 'float':
-                        audioData[i] = Math.max(-1.0, Math.min(1.0, parseFloat(value)));
-                        break;
-                    case 'func':
-                        const freq = parseFloat(value);
-                        audioData[i] = Math.sin(2 * Math.PI * freq * i / sampleRate);
-                        break;
+                    case 'bytebeat': audioData[i] = ((value | 0) & 0xFF) / 255.0 * 2.0 - 1.0; break;
+                    case 'signed': audioData[i] = ((value | 0) + 128) / 255.0 * 2.0 - 1.0; break;
+                    case 'float': audioData[i] = Math.max(-1.0, Math.min(1.0, parseFloat(value))); break;
+                    case 'func': const freq = parseFloat(value); audioData[i] = Math.sin(2 * Math.PI * freq * i / sampleRate); break;
                 }
             }
             return audioData;
@@ -400,7 +469,7 @@
         function play() {
             if (sourceNode) sourceNode.stop();
             const audioContext = new (window.AudioContext || window.webkitAudioContext());
-            const sampleRate = parseInt(sampleRateInput.value);
+            const sampleRate = parseInt(sampleRateInput.value, 10);
             audioBuffer = audioContext.createBuffer(1, sampleRate * 60, sampleRate);
             const channelData = audioBuffer.getChannelData(0);
             channelData.set(generateAudioData());
@@ -413,10 +482,7 @@
         }
 
         function stop() {
-            if (sourceNode) {
-                sourceNode.stop();
-                sourceNode = null;
-            }
+            if (sourceNode) { sourceNode.stop(); sourceNode = null; }
             playButton.textContent = '▶ Play';
         }
         
@@ -432,23 +498,22 @@
                 stop();
                 t = preset.settings.startT;
                 errorDiv.textContent = `Применен пресет из категории: ${preset.name}`;
+                updateURL(); // Обновляем URL при применении пресета
             }
         }
 
-        // --- Обработчики событий ---
+        // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
 
         applyButton.addEventListener('click', () => {
             if (compileFormula(formulaInput.value)) {
                 stop();
-                t = parseInt(startTInput.value);
+                t = parseInt(startTInput.value, 10);
+                updateURL(); // Обновляем URL при применении формулы
             }
         });
 
         playButton.addEventListener('click', () => {
-            if (!bytebeatFormula) {
-                errorDiv.textContent = "Сначала примените формулу!";
-                return;
-            }
+            if (!bytebeatFormula) { errorDiv.textContent = "Сначала примените формулу!"; return; }
             if (sourceNode) stop();
             else play();
         });
@@ -459,80 +524,62 @@
             advancedControls.style.display = 'block';
         });
 
-        // --- Генерация списка пресетов при загрузке ---
+        // --- ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ---
         window.onload = () => {
-            // Проверяем, есть ли формула в URL
-            // ИЗМЕНЕНИЕ: Добавляем decodeURIComponent для корректной обработки символов
-            const urlHash = decodeURIComponent(window.location.hash.substring(1));
-            isDirectPlayMode = urlHash.length > 0;
+            const { formula, settings } = parseURL();
+            isDirectPlayMode = formula.length > 0;
             
             if (isDirectPlayMode) {
-                // Режим с формулой в URL
-                formulaInput.value = urlHash;
-                formulaDisplay.textContent = urlHash;
-                formulaDisplay.style.display = 'block';
+                // Режим прямого воспроизведения
                 document.getElementById('controls').style.display = 'none';
                 document.getElementById('presets-container').style.display = 'none';
-                compileFormula(urlHash);
+                document.getElementById('showAdvanced').style.display = 'none';
+                document.getElementById('advancedWarning').style.display = 'none';
+                
+                formulaDisplay.textContent = formula;
+                formulaDisplay.style.display = 'block';
+                advancedControls.style.display = 'block';
+
+                // Заполняем настройки из URL
+                formulaInput.value = formula;
+                if (settings.beatType) beatTypeSelect.value = settings.beatType;
+                if (settings.sampleRate) sampleRateInput.value = settings.sampleRate;
+                if (settings.startT) startTInput.value = settings.startT;
+                if (settings.speed) speedInput.value = settings.speed;
+
+                const success = compileFormula(formula);
+                if (!success) {
+                    playButton.disabled = true;
+                }
             } else {
                 // Обычный режим
                 compileFormula(formulaInput.value);
                 
-                // Генерируем список пресетов
                 for (const key in presets) {
                     const category = presets[key];
-                    
-                    // Создаем контейнер для категории
                     const categoryDiv = document.createElement('div');
                     categoryDiv.className = 'preset-category';
-
-                    // Создаем заголовок категории (кликабельный)
                     const header = document.createElement('h4');
                     header.innerHTML = `${category.name} <span>▼</span>`;
                     header.addEventListener('click', () => {
                         const formulasDiv = categoryDiv.querySelector('.preset-formulas');
                         const arrow = header.querySelector('span');
-                        if (formulasDiv.style.display === 'block') {
-                            formulasDiv.style.display = 'none';
-                            arrow.textContent = '▼';
-                        } else {
-                            formulasDiv.style.display = 'block';
-                            arrow.textContent = '▲';
-                        }
+                        if (formulasDiv.style.display === 'block') { formulasDiv.style.display = 'none'; arrow.textContent = '▼'; }
+                        else { formulasDiv.style.display = 'block'; arrow.textContent = '▲'; }
                     });
-
-                    // Создаем контейнер для формул
                     const formulasDiv = document.createElement('div');
                     formulasDiv.className = 'preset-formulas';
-                    
-                    // Добавляем формулы
                     category.formulas.forEach(formula => {
-                        const itemDiv = document.createElement('div');
-                        itemDiv.className = 'formula-item';
-
-                        const codeSpan = document.createElement('span');
-                        codeSpan.className = 'formula-code';
-                        codeSpan.textContent = formula;
-
-                        const tryButton = document.createElement('button');
-                        tryButton.className = 'try-button';
-                        tryButton.textContent = 'Попробовать';
-                        tryButton.addEventListener('click', () => {
-                            applyPreset(key, formula);
-                        });
-
-                        itemDiv.appendChild(codeSpan);
-                        itemDiv.appendChild(tryButton);
-                        formulasDiv.appendChild(itemDiv);
+                        const itemDiv = document.createElement('div'); itemDiv.className = 'formula-item';
+                        const codeSpan = document.createElement('span'); codeSpan.className = 'formula-code'; codeSpan.textContent = formula;
+                        const tryButton = document.createElement('button'); tryButton.className = 'try-button'; tryButton.textContent = 'Попробовать';
+                        tryButton.addEventListener('click', () => { applyPreset(key, formula); });
+                        itemDiv.appendChild(codeSpan); itemDiv.appendChild(tryButton); formulasDiv.appendChild(itemDiv);
                     });
-
-                    categoryDiv.appendChild(header);
-                    categoryDiv.appendChild(formulasDiv);
-                    presetsListContainer.appendChild(categoryDiv);
+                    categoryDiv.appendChild(header); categoryDiv.appendChild(formulasDiv); presetsListContainer.appendChild(categoryDiv);
                 }
             }
         };
-
     </script>
 </body>
 </html>
