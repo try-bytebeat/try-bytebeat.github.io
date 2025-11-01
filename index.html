@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Продвинутый Bytebeat Player</title>
+    <title>Bytebeat Player!</title>
     <style>
         body { font-family: sans-serif; background-color: #121212; color: #eee; text-align: center; padding-top: 30px; }
         h1 { color: #fff; }
@@ -107,6 +107,18 @@
             flex-grow: 1;
             margin-right: 10px;
         }
+        .formula-display {
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px auto;
+            max-width: 800px;
+            text-align: center;
+            font-family: monospace;
+            font-size: 1.1em;
+            color: #ccc;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -117,6 +129,8 @@
         <br>
         <button id="applyButton">Применить формулу</button>
     </div>
+
+    <div id="formulaDisplay" class="formula-display" style="display: none;"></div>
 
     <div id="error"></div>
 
@@ -159,6 +173,7 @@
         const playButton = document.getElementById('playButton');
         const applyButton = document.getElementById('applyButton');
         const formulaInput = document.getElementById('formulaInput');
+        const formulaDisplay = document.getElementById('formulaDisplay');
         const errorDiv = document.getElementById('error');
         const showAdvancedButton = document.getElementById('showAdvanced');
         const advancedControls = document.getElementById('advancedControls');
@@ -175,6 +190,7 @@
         let sourceNode;
         let t = 1;
         let bytebeatFormula;
+        let isDirectPlayMode = false;
 
         // База данных пресетов (полностью обновленная)
         const presets = {
@@ -445,57 +461,74 @@
 
         // --- Генерация списка пресетов при загрузке ---
         window.onload = () => {
-            compileFormula(formulaInput.value);
-            for (const key in presets) {
-                const category = presets[key];
+            // Проверяем, есть ли формула в URL
+            const urlHash = window.location.hash.substring(1); // Удаляем символ #
+            isDirectPlayMode = urlHash.length > 0;
+            
+            if (isDirectPlayMode) {
+                // Режим с формулой в URL
+                formulaInput.value = urlHash;
+                formulaDisplay.textContent = urlHash;
+                formulaDisplay.style.display = 'block';
+                document.getElementById('controls').style.display = 'none';
+                document.getElementById('presets-container').style.display = 'none';
+                compileFormula(urlHash);
+            } else {
+                // Обычный режим
+                compileFormula(formulaInput.value);
                 
-                // Создаем контейнер для категории
-                const categoryDiv = document.createElement('div');
-                categoryDiv.className = 'preset-category';
+                // Генерируем список пресетов
+                for (const key in presets) {
+                    const category = presets[key];
+                    
+                    // Создаем контейнер для категории
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'preset-category';
 
-                // Создаем заголовок категории (кликабельный)
-                const header = document.createElement('h4');
-                header.innerHTML = `${category.name} <span>▼</span>`;
-                header.addEventListener('click', () => {
-                    const formulasDiv = categoryDiv.querySelector('.preset-formulas');
-                    const arrow = header.querySelector('span');
-                    if (formulasDiv.style.display === 'block') {
-                        formulasDiv.style.display = 'none';
-                        arrow.textContent = '▼';
-                    } else {
-                        formulasDiv.style.display = 'block';
-                        arrow.textContent = '▲';
-                    }
-                });
-
-                // Создаем контейнер для формул
-                const formulasDiv = document.createElement('div');
-                formulasDiv.className = 'preset-formulas';
-                
-                // Добавляем формулы
-                category.formulas.forEach(formula => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'formula-item';
-
-                    const codeSpan = document.createElement('span');
-                    codeSpan.className = 'formula-code';
-                    codeSpan.textContent = formula;
-
-                    const tryButton = document.createElement('button');
-                    tryButton.className = 'try-button';
-                    tryButton.textContent = 'Попробовать';
-                    tryButton.addEventListener('click', () => {
-                        applyPreset(key, formula);
+                    // Создаем заголовок категории (кликабельный)
+                    const header = document.createElement('h4');
+                    header.innerHTML = `${category.name} <span>▼</span>`;
+                    header.addEventListener('click', () => {
+                        const formulasDiv = categoryDiv.querySelector('.preset-formulas');
+                        const arrow = header.querySelector('span');
+                        if (formulasDiv.style.display === 'block') {
+                            formulasDiv.style.display = 'none';
+                            arrow.textContent = '▼';
+                        } else {
+                            formulasDiv.style.display = 'block';
+                            arrow.textContent = '▲';
+                        }
                     });
 
-                    itemDiv.appendChild(codeSpan);
-                    itemDiv.appendChild(tryButton);
-                    formulasDiv.appendChild(itemDiv);
-                });
+                    // Создаем контейнер для формул
+                    const formulasDiv = document.createElement('div');
+                    formulasDiv.className = 'preset-formulas';
+                    
+                    // Добавляем формулы
+                    category.formulas.forEach(formula => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'formula-item';
 
-                categoryDiv.appendChild(header);
-                categoryDiv.appendChild(formulasDiv);
-                presetsListContainer.appendChild(categoryDiv);
+                        const codeSpan = document.createElement('span');
+                        codeSpan.className = 'formula-code';
+                        codeSpan.textContent = formula;
+
+                        const tryButton = document.createElement('button');
+                        tryButton.className = 'try-button';
+                        tryButton.textContent = 'Попробовать';
+                        tryButton.addEventListener('click', () => {
+                            applyPreset(key, formula);
+                        });
+
+                        itemDiv.appendChild(codeSpan);
+                        itemDiv.appendChild(tryButton);
+                        formulasDiv.appendChild(itemDiv);
+                    });
+
+                    categoryDiv.appendChild(header);
+                    categoryDiv.appendChild(formulasDiv);
+                    presetsListContainer.appendChild(categoryDiv);
+                }
             }
         };
 
