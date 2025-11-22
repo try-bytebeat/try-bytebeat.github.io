@@ -149,9 +149,10 @@
             font-family: monospace;
             font-size: 1em;
             line-height: 1.5;
-            min-width: 40px;
-            white-space: pre-wrap; /* Исправлено: pre на pre-wrap */
-            overflow: hidden;
+            width: 40px; /* Фиксированная ширина */
+            white-space: pre; /* Изменено с pre-wrap на pre */
+            overflow: hidden; /* Скрываем все, что выходит за границы */
+            flex-shrink: 0; /* Запрещаем сжатие */
         }
         #formulaInput {
             width: 400px;
@@ -164,6 +165,7 @@
             border: none;
             border-radius: 0;
             tab-size: 4;
+            flex-shrink: 0; /* Запрещаем сжатие */
         }
         .help-section {
             margin-top: 15px;
@@ -316,7 +318,7 @@ var b = 10;
             <p>Переменные можно использовать в любой части формулы после объявления.</p>
             <p>Пример:</p>
             <code>var freq = 440;<br>var amp = 0.5;<br>sin(t * freq / 8000) * amp</code>
-            <p>Доступные функции: sin, cos, tan, floor, ceil, round, abs, pow, sqrt, exp, log, min, max, random, int</p>
+            <p>Доступные функции: sin, cos, tan, floor, ceil, round, abs, pow, sqrt, exp, log, log2, min, max, random, int, tanh</p>
             <p>Можно использовать несколько выражений через запятую, последнее будет возвращено как результат.</p>
         </div>
     </div>
@@ -915,6 +917,7 @@ var b = 10;
                         const sqrt = Math.sqrt;
                         const exp = Math.exp;
                         const log = Math.log;
+                        const log2 = Math.log2;
                         const min = Math.min;
                         const max = Math.max;
                         const random = Math.random;
@@ -927,6 +930,12 @@ var b = 10;
                                 return x.charCodeAt(i);
                             }
                             return Math.floor(x);
+                        };
+                        
+                        // Функция tanh (гиперболический тангенс)
+                        const tanh = (x) => {
+                            const e = Math.exp(2 * x);
+                            return (e - 1) / (e + 1);
                         };
                         
                         ${processedFormula}
