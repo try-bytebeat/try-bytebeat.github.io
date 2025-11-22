@@ -869,37 +869,6 @@ var b = 10;
 
             function compileFormula(formulaString) {
                 try {
-                    // Обрабатываем многострочный код
-                    let processedFormula = formulaString;
-                    
-                    // Если в коде нет явного return, добавляем его
-                    if (!formulaString.includes('return')) {
-                        // Если формула содержит запятые, оборачиваем ее в скобки и добавляем return
-                        if (formulaString.includes(',')) {
-                            processedFormula = `return (${formulaString});`;
-                        } else {
-                            // Разбиваем на строки и ищем последнее непустое выражение (не комментарий)
-                            const lines = formulaString.split('\n');
-                            let lastExpression = '';
-                            for (let i = lines.length - 1; i >= 0; i--) {
-                                const line = lines[i].trim();
-                                if (line && !line.startsWith('//')) {
-                                    lastExpression = line;
-                                    break;
-                                }
-                            }
-                            
-                            if (lastExpression) {
-                                // Удаляем последнее выражение из кода и добавляем return
-                                const lastLineIndex = formulaString.lastIndexOf(lastExpression);
-                                processedFormula = formulaString.substring(0, lastLineIndex) + 
-                                                  `return ${lastExpression};`;
-                            } else {
-                                throw new Error("Формула не содержит выражений для вычисления");
-                            }
-                        }
-                    }
-                    
                     // Создаем функцию с доступом к математическим функциям
                     const functionBody = `
                         // Предоставляем доступ к математическим функциям
@@ -938,7 +907,8 @@ var b = 10;
                             return (e - 1) / (e + 1);
                         };
                         
-                        ${processedFormula}
+                        // Выполняем код как есть, последнее выражение вернет значение
+                        ${formulaString}
                     `;
                     
                     bytebeatFormula = new Function("t", functionBody);
@@ -975,6 +945,11 @@ var b = 10;
                 for (let i = 0; i < length; i++) {
                     try {
                         let value = bytebeatFormula(t);
+                        
+                        // Если результат - массив, берем первый элемент
+                        if (Array.isArray(value)) {
+                            value = value[0];
+                        }
                         
                         // Проверяем, что значение является числом
                         if (typeof value !== 'number' || isNaN(value)) {
